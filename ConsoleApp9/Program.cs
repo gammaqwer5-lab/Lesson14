@@ -30,10 +30,9 @@ namespace ConsoleApp9
 
             adapter.SelectCommand = connection.CreateCommand();
             adapter.SelectCommand.CommandText = $"""
-                SELECT id, nickname, first_name, last_name
-                FROM students_lesson13
+                SELECT id, nickname, first_name, last_name, age
+                FROM students_lesson14
                 ORDER BY id
-                LIMIT 10
                 """;
 
             DataTable table = new DataTable();
@@ -41,80 +40,151 @@ namespace ConsoleApp9
 
             // 1
             ShowTabel(table);
-            Console.WriteLine();
 
             // 2
-            Console.WriteLine("2: новая строка");
-
-            DataRow newRow = table.NewRow();
-            newRow["id"] = 999;
-            newRow["nickname"] = "321";
-            newRow["first_name"] = "123";
-            newRow["last_name"] = "321";
-
-            Console.WriteLine($"состояние: {newRow.RowState}");
-            Console.WriteLine();
+            table.Rows[0]["age"] = (int)table.Rows[0]["age"] + 1;
 
             // 3
-            Console.WriteLine("3: добавление строки в таблицу");
-
+            var newRow = table.NewRow();
+            newRow["nickname"] = "nick";
+            newRow["first_name"] = "123";
+            newRow["last_name"] = "321";
+            newRow["age"] = 21;
             table.Rows.Add(newRow);
 
-            Console.WriteLine($"состояние: {newRow.RowState}");
-            Console.WriteLine();
-            //ShowTabel(table);
-
             // 4
-            Console.WriteLine("4: изменение имени у первого студента");
-
-            table.Rows[0]["first_name"] = "newName";
-
-            Console.WriteLine($"новое имя: {table.Rows[0]["first_name"]}, состояние: {table.Rows[0].RowState}");
-            //ShowTabel(table);
-            Console.WriteLine();
+            table.Rows[1].Delete();
 
             // 5
-            Console.WriteLine("5: Удаление второго студента");
+            Console.WriteLine("\nDataTable до сохранения");
+            ShowTabel(table);
 
-            table.Rows[1].Delete();
-            Console.WriteLine($"состояние: {table.Rows[1].RowState}");
-            //ShowTabel(table);
-            Console.WriteLine();
+            // 6
+            SaveTable(table, factory, connString);
 
             // 7
-            Console.WriteLine("7: вызов RejectChanges()");
-
-            table.RejectChanges();
-
+            Console.WriteLine("\nDataTable после сохранения");
             ShowTabel(table);
-            Console.WriteLine();
 
             // 8
-            Console.WriteLine("8: вызов AcceptChanges()");
+            Console.WriteLine("\nпроверка БД");
+            CheckDatabase(factory, connString);
 
-            DataRow newRow2 = table.NewRow();
-            newRow2["id"] = 111;
-            newRow2["nickname"] = "OOOOO";
-            newRow2["first_name"] = "777";
-            newRow2["last_name"] = "888";
-            table.Rows.Add(newRow2);
+        }
 
-            table.Rows[0]["first_name"] = "888";
-            table.Rows[1].Delete();
+        static void CheckDatabase(DbProviderFactory factory, string connString)
+        {
+            using var connection = factory.CreateConnection()!;
+            connection.ConnectionString = connString;
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT id, first_name, last_name, age FROM students_lesson14 ORDER BY id";
+            using var reader = cmd.ExecuteReader();
 
-            table.AcceptChanges();
-            ShowTabel(table);
+            while (reader.Read())
+            {
+                Console.WriteLine($"ID: {reader["id"]}, " +
+                    $"Имя: {reader["first_name"]}, " +
+                    $"Фамилия: {reader["last_name"]}, " +
+                    $"Возраст: {reader["age"]}");
+            }
+        }
+
+        static void SaveTable(DataTable table, DbProviderFactory factory, string connString)
+        {
+            using DbConnection connection = factory.CreateConnection()!;
+            connection.ConnectionString = connString;
+            connection.Open();
+
+            using DbTransaction transaction = connection.BeginTransaction();
+            using DbDataAdapter adapter = factory.CreateDataAdapter()!;
+
+            InsertCommand(connection, transaction, adapter);
+            UpdateCommand(connection, transaction, adapter);
+            DeleteCommand(connection, transaction, adapter);
+
+            try
+            {
+                int rowsAffected = adapter.Update(table);
+                transaction.Commit();
+                Console.WriteLine($"сохранено строк: {rowsAffected}");
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                Console.WriteLine($"ошибка сохранения: {ex.Message}");
+            }
+        }
+
+        static void InsertCommand(DbConnection connection, DbTransaction transaction, DbDataAdapter adapter)
+        {
+            var InsertCommand = connection.CreateCommand();
+            InsertCommand.Transaction = transaction;
+            InsertCommand.CommandText = """
+                INSERT INTO students_lesson14 (nickname, first_name, last_name, age) 
+                VALUES (@nickname, @first_name, @last_name, @age) 
+                RETURNING id;
+                """;
+            AddParameter(InsertCommand, "@nickname", "nickname");
+            AddParameter(InsertCommand, "@first_name", "first_name");
+            AddParameter(InsertCommand, "@last_name", "last_name");
+            AddParameter(InsertCommand, "@age", "age");
+
+            InsertCommand.UpdatedRowSource = UpdateRowSource.FirstReturnedRecord;
+            adapter.InsertCommand = InsertCommand;
+        }
+
+        static void UpdateCommand(DbConnection connection, DbTransaction transaction, DbDataAdapter adapter)
+        {
+            var UpdateCommand = connection.CreateCommand();
+            UpdateCommand.Transaction = transaction;
+            UpdateCommand.CommandText = """
+                UPDATE students_lesson14 
+                SET nickname = @nickname, first_name = @first_name, last_name = @last_name, age = @age 
+                WHERE id = @id;
+                """;
+            AddParameter(UpdateCommand, "@nickname", "nickname");
+            AddParameter(UpdateCommand, "@first_name", "first_name");
+            AddParameter(UpdateCommand, "@last_name", "last_name");
+            AddParameter(UpdateCommand, "@age", "age");
+            AddParameter(UpdateCommand, "@id", "id", DataRowVersion.Original);
+            adapter.UpdateCommand = UpdateCommand;
+        }
+
+        static void DeleteCommand(DbConnection connection, DbTransaction transaction, DbDataAdapter adapter)
+        {
+            var DeleteCommand = connection.CreateCommand();
+            DeleteCommand.Transaction = transaction;
+            DeleteCommand.CommandText = "DELETE FROM students_lesson14 WHERE id = @id;";
+            AddParameter(DeleteCommand, "@id", "id", DataRowVersion.Original);
+            adapter.DeleteCommand = DeleteCommand;
+        }
+
+        static void AddParameter(DbCommand cmd, string paramName, string sourceColumn, DataRowVersion version = DataRowVersion.Current)
+        {
+            DbParameter p = cmd.CreateParameter();
+            p.ParameterName = paramName;
+            p.SourceColumn = sourceColumn;
+            p.SourceVersion = version;
+            cmd.Parameters.Add(p);
         }
 
         static void ShowTabel(DataTable table)
         {
             foreach (DataRow row in table.Rows)
             {
+                DataRowVersion version = DataRowVersion.Current;
+                if (row.RowState == DataRowState.Deleted)
+                {
+                    version = DataRowVersion.Original;
+                }
+
                 Console.WriteLine(
-                    $"ID: {row["id"]}, " +
-                    $"Имя: {row["first_name"]}, " +
-                    $"Фамилия: {row["last_name"]}, " +
-                    $"Состояние: {row.RowState} ");
+                    $"ID: {row["id", version]}, " +
+                    $"Имя: {row["first_name", version]}, " +
+                    $"Фамилия: {row["last_name", version]}, " +
+                    $"Возраст: {row["age", version]}, " +
+                    $"Состояние: {row.RowState}");
             }
             Console.WriteLine($"Количество строк: {table.Rows.Count}");
         }
