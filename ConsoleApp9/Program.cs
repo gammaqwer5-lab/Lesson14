@@ -23,7 +23,7 @@ namespace ConsoleApp11
             DbProviderFactory factory = DbProviderFactories.GetFactory(provider);
 
             using DbConnection connection = factory.CreateConnection() ?? throw new InvalidOperationException();
-            string connString = "";
+            string connString = "Host=wotacoma.ru;Port=5090;Username=poel;Password=poel124;Database=poel";
             connection.ConnectionString = connString;
 
             using DbDataAdapter adapter =
