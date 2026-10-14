@@ -6,7 +6,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+//
 namespace ConsoleApp9
 {
     public class Program
@@ -39,71 +39,58 @@ namespace ConsoleApp9
             DataTable table = new DataTable();
             adapter.Fill(table);
 
-            // 1
             ShowTabel(table);
             Console.WriteLine();
+
+            // 1
+            table.Rows[0]["first_name"] = "Тимофей";
 
             // 2
-            Console.WriteLine("2: новая строка");
-            
             DataRow newRow = table.NewRow();
-            newRow["id"] = 999;
-            newRow["nickname"] = "321";
-            newRow["first_name"] = "123";
-            newRow["last_name"] = "321";
-
-            Console.WriteLine($"состояние: {newRow.RowState}");
-            Console.WriteLine();
+            newRow["first_name"] = "Мария";
+            newRow["last_name"] = "Иванова";
+            table.Rows.Add(newRow);
 
             // 3
-            Console.WriteLine("3: добавление строки в таблицу");
-            
-            table.Rows.Add(newRow);
-            
-            Console.WriteLine($"состояние: {newRow.RowState}");
-            Console.WriteLine();
-            //ShowTabel(table);
+            table.Rows[1].Delete();
 
             // 4
-            Console.WriteLine("4: изменение имени у первого студента");
-
-            table.Rows[0]["first_name"] = "newName";
-
-            Console.WriteLine($"новое имя: {table.Rows[0]["first_name"]}, состояние: {table.Rows[0].RowState}");
-            //ShowTabel(table);
-            Console.WriteLine();
+            ShowChangelog(table);
 
             // 5
-            Console.WriteLine("5: Удаление второго студента");
-
-            table.Rows[1].Delete();
-            Console.WriteLine($"состояние: {table.Rows[1].RowState}");
-            //ShowTabel(table);
-            Console.WriteLine();
-
-            // 7
-            Console.WriteLine("7: вызов RejectChanges()");
-            
+            Console.WriteLine("\nвызов RejectChanges()\n");
             table.RejectChanges();
-            
             ShowTabel(table);
-            Console.WriteLine();
-
-            // 8
-            Console.WriteLine("8: вызов AcceptChanges()");
-
-            DataRow newRow2 = table.NewRow();
-            newRow2["id"] = 111;
-            newRow2["nickname"] = "OOOOO";
-            newRow2["first_name"] = "777";
-            newRow2["last_name"] = "888";
-            table.Rows.Add(newRow2);
-
-            table.Rows[0]["first_name"] = "888";
-            table.Rows[1].Delete();
-
-            table.AcceptChanges();
-            ShowTabel(table);
+        }
+        static void ShowChangelog(DataTable table)
+        {
+            foreach (DataRow row in table.Rows)
+            {
+                switch (row.RowState)
+                {
+                    case DataRowState.Modified:
+                        {
+                            string oldName = row["first_name", DataRowVersion.Original].ToString()!;
+                            string newName = row["first_name", DataRowVersion.Current].ToString()!;
+                            Console.WriteLine($"[MODIFIED] {oldName} → {newName}");
+                            break;
+                        }
+                    case DataRowState.Added:
+                        {
+                            string firstName = row["first_name", DataRowVersion.Current].ToString()!;
+                            string lastName = row["last_name", DataRowVersion.Current].ToString()!;
+                            Console.WriteLine($"[ADDED] {firstName} {lastName}");
+                            break;
+                        }
+                    case DataRowState.Deleted:
+                        {
+                            string firstName = row["first_name", DataRowVersion.Original].ToString()!;
+                            string lastName = row["last_name", DataRowVersion.Original].ToString()!;
+                            Console.WriteLine($"[DELETED] {firstName} {lastName}");
+                            break;
+                        }
+                }
+            }
         }
 
         static void ShowTabel(DataTable table)
